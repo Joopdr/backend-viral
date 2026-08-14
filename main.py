@@ -1,37 +1,63 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
 import os
+import shutil
 
-app = FastAPI()
+# Inicialização da aplicação Backend
+app = FastAPI(title="Viralize.AI - Video Processing Engine")
 
-# Isso permite que o seu site na Vercel "converse" com este servidor
+# ==========================================
+# CONFIGURAÇÃO DE SEGURANÇA E CORS
+# Isso permite que o seu site na Vercel envie arquivos pesados sem ser bloqueado.
+# ==========================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],  # Em produção final, trocar "*" pelo link da sua Vercel
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
-def home():
-    return {"status": "Servidor da Agência Viral está ONLINE e pronto para cortar vídeos!"}
+# Diretório temporário para salvar os vídeos do usuário
+UPLOAD_DIR = "temp_videos"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.post("/gerar-ideia")
-async def gerar_ideia(tema: str):
+# ==========================================
+# ROTAS DO SERVIDOR
+# ==========================================
+
+@app.get("/")
+def read_root():
+    return {
+        "status": "Online",
+        "system": "Viralize.AI Render Backend",
+        "message": "O motor de processamento está ativo e aguardando arquivos."
+    }
+
+@app.post("/upload")
+async def upload_video(video: UploadFile = File(...)):
+    """
+    Recebe o arquivo .mp4 do Frontend (Vercel) e salva no servidor Render.
+    Aqui é onde o FFmpeg entrará em ação na próxima fase de desenvolvimento.
+    """
     try:
-        # Pega a chave secreta que vamos configurar no Render
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            return {"erro": "Chave API não encontrada no servidor."}
+        # Caminho onde o arquivo será salvo no servidor
+        file_path = os.path.join(UPLOAD_DIR, video.filename)
+        
+        # Salvando o arquivo físico recebido do usuário
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
             
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-pro")
+        # O retorno que fará a barra de 90% pular para 100% de Sucesso no seu painel
+        return {
+            "status": "success",
+            "filename": video.filename,
+            "message": "Upload concluído! O vídeo foi recebido pelo motor de processamento.",
+            "file_size_bytes": os.path.getsize(file_path)
+        }
         
-        prompt = f"Haja como um Diretor de Virais. O tema do vídeo é: {tema}. Me dê 3 ideias de cortes virais para o TikTok com ganchos (primeiros 3 segundos)."
-        resposta = model.generate_content(prompt)
-        
-        return {"sucesso": True, "ideias": resposta.text}
     except Exception as e:
-        return {"sucesso": False, "erro": str(e)}
+        return {
+            "status": "error",
+            "message": f"Erro interno ao processar o vídeo: {str(e)}"
+        }
