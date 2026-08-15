@@ -1,5 +1,4 @@
 import os
-import str
 import uuid
 import shutil
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
